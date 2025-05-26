@@ -122,7 +122,6 @@ typedef struct {
 
   int num_nodes;
   int num_procs;
-  int final_num_procs;
   unsigned long avail [MAX_BITMASK_LEN];
   int avail_count;
   unsigned long cpu_info   [MAX_CPUS];
@@ -175,18 +174,6 @@ static inline int popcount(unsigned long number) {
 
   while (number > 0) {
     if (number & 1) count ++;
-    number >>= 1;
-  }
-
-  return count;
-}
-
-static inline int rcount(unsigned long number) {
-
-  int count = -1;
-
-  while ((number > 0) && ((number & 0)) == 0) {
-    count ++;
     number >>= 1;
   }
 
@@ -391,7 +378,7 @@ static void numa_mapping(void) {
     core = 0;
     for (cpu = 0; cpu < common -> num_procs; cpu ++) {
       bitmask_idx = CPUELT(cpu);
-      if (common -> node_info[node][bitmask_idx] & common -> avail[bitmask_idx] & CPUMASK(cpu)) {
+      if (common -> node_info[node][bitmask_idx]) {
 	common -> cpu_info[count] = WRITE_CORE(core) | WRITE_NODE(node) | WRITE_CPU(cpu);
 	count ++;
 	core ++;
@@ -415,7 +402,7 @@ static void numa_mapping(void) {
     }
   }
   for (i = 0; i < MAX_BITMASK_LEN; i++)
-    cpu_count += popcount(common -> node_info[current_node][i] & common -> avail[i]);
+    cpu_count += popcount(common -> node_info[current_node][i]);
 
   /*
    * If all the processes can be accommodated in the
@@ -570,13 +557,13 @@ static void disable_affinity(void) {
   /* }else */
   /*   lprocmask = (1UL << common -> final_num_procs) - 1; */
 
-  bitmask_idx = CPUELT(common -> final_num_procs);
+  bitmask_idx = CPUELT(common -> num_procs);
 
   for(i=0; i< bitmask_idx; i++){
     lprocmask[count++] = 0xFFFFFFFFFFFFFFFFUL;
   }
-  if(CPUMASK(common -> final_num_procs) != 1){
-    lprocmask[count++] = CPUMASK(common -> final_num_procs) - 1;
+  if(CPUMASK(common -> num_procs) != 1){
+    lprocmask[count++] = CPUMASK(common -> num_procs) - 1;
   }
   lprocmask_count = count;
 
@@ -731,12 +718,12 @@ static void local_cpu_map(void) {
 
     cpu ++;
 
-  } while ((mapping < numprocs) && (cpu < common -> final_num_procs));
+  } while ((mapping < numprocs) && (cpu < common -> num_procs));
 
   disable_mapping = 0;
 
   if ((mapping < numprocs) || (numprocs == 1)) {
-    for (cpu = 0; cpu < common -> final_num_procs; cpu ++) {
+    for (cpu = 0; cpu < common -> num_procs; cpu ++) {
       if (common -> cpu_use[cpu] == pshmid) common -> cpu_use[cpu] = 0;
     }
     disable_mapping = 1;
@@ -930,10 +917,7 @@ void gotoblas_affinity_init(void) {
 
     if (common -> num_nodes > 1) numa_mapping();
 
-    common -> final_num_procs = 0;
-    for(i = 0; i < common -> avail_count; i++) common -> final_num_procs += rcount(common -> avail[i]) + 1;   //Make the max cpu number. 
-
-    for (cpu = 0; cpu < common -> final_num_procs; cpu ++) common -> cpu_use[cpu] =  0;
+    for (cpu = 0; cpu < common -> num_procs; cpu ++) common -> cpu_use[cpu] =  0;
 
     common -> magic = SH_MAGIC;
 
